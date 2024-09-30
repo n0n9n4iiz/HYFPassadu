@@ -54,7 +54,6 @@ function App() {
   };
   useEffect(() => {
     (async () => {
-      console.log(1)
       const initialFrom = 0;
       const initialTo = 10;
       setDataFrom(initialFrom);
