@@ -12,34 +12,50 @@ import "./App.css";
 import { useEffect, useState } from "react";
 import InfiniteScroll from "react-infinite-scroll-component";
 import liff from "@line/liff";
-//import { useLoaderData } from "react-router-dom";
+import { useLoaderData } from "react-router-dom";
 import Swal from "sweetalert2";
-import { getParcel, updateStock } from "./api/parcel.js";
+import {
+  getParcel,
+  getParcel2,
+  updateStock,
+  updateStock2,
+} from "./api/parcel.js";
 import { SkeletonItemCard } from "./components/SkeletonItemCard.jsx";
 
 export const AppLoader = async () => {
-  await liff.init({ liffId: import.meta.env.VITE_LIFFID });
-  if (liff.isLoggedIn()) {
-    return {
-      profile: await liff.getProfile(),
+  //await liff.init({ liffId: import.meta.env.VITE_LIFFID });
+  // if (liff.isLoggedIn()) {
+  //   return {
+  //     line: {
+  //       profile: await liff.getProfile(),
+  //       isWebUser: liff.getOS() == "web",
+  //     },
+  //     data: await getParcel2(),
+  //   };
+  // }
+  // liff.login({ redirectUri: `${location.origin}/` });
+  return {
+    line: {
+      profile: "userId",
       isWebUser: liff.getOS() == "web",
-    };
-  }
-  liff.login({ redirectUri: `${location.origin}/` });
-  return null;
+    },
+    data: await getParcel2(),
+  };
 };
 function App() {
-  //const dataloader = useLoaderData();
+  const dataloader = useLoaderData();
+  const [data, setData] = useState(dataloader?.data);
   const [dataFrom, setDataFrom] = useState(0);
   const [dataTo, setDataTo] = useState(10);
   const [search, setSearch] = useState("");
   const [state, setState] = useState({
-    items: [],
+    items: data,
     hasMore: true,
   });
   const [isSlideIn, setIsSlideIn] = useState(true);
 
   const fetchMoreData = async () => {
+    setIsSlideIn((prev) => !prev);
     const nextDataFrom = dataFrom + 10;
     const nextDataTo = dataTo + 10;
     const newItems = await fetchGetParcel(search, nextDataFrom, nextDataTo);
@@ -78,39 +94,68 @@ function App() {
   }, [search]);
 
   const fetchGetParcel = async (search, from, to) => {
-    const res = await getParcel(search, from, to);
-    return res?.data;
+    //const res = await getParcel(search, from, to);
+    const res = filterData(search, from, to);
+    return res;
+    //return res?.data;
   };
+
+  const filterData = (search, from, to) => {
+    return search
+      ? data
+          .filter((x) =>
+            x.parCelName.toLowerCase().includes(search.toLowerCase())
+          )
+          .slice(from, to)
+      : data.slice(from, to);
+  };
+
   const handleClickItem = async (e) => {
     const itemSelectd = state.items[e];
-    const inputValue = 1;
-    if (Number(itemSelectd.Stock) >= 0) {
-      const { value: quantity } = await Swal.fire({
-        title: "กรุณาระบุจำนวน",
-        input: "number",
-        inputValue,
+    if (Number(itemSelectd.stockQuantity) >= 0) {
+      const { value: formValues } = await Swal.fire({
+        title: "กรุณากรอกข้อมูลการเบิก",
         showCancelButton: true,
         confirmButtonText: "ตกลง",
         cancelButtonText: "ยกเลิก",
         confirmButtonColor: "#3085d6",
         cancelButtonColor: "#d33",
-        inputValidator: (value) => {
-          if (!value) {
-            return "กรุณากรอกเฉพาะตัวเลข";
+        html: `
+        <input id="swal-input-quantity" class="swal2-input" placeholder="จำนวนที่ต้องการ">
+        <input id="swal-input-using" class="swal2-input" placeholder="เหตุผลการเบิก">
+      `,
+        focusConfirm: false,
+        preConfirm: () => {
+          if (!document.getElementById("swal-input-quantity").value) {
+            Swal.showValidationMessage(
+              '<i class="fa fa-info-circle"></i> กรุณากรอกจำนวนด้วยตัวเลข'
+            );
+            return;
           }
+          if (!document.getElementById("swal-input-using").value) {
+            Swal.showValidationMessage(
+              '<i class="fa fa-info-circle"></i> กรุณากรอกเหตุผลการเบิก'
+            );
+            return;
+          }
+          return [
+            document.getElementById("swal-input-quantity").value,
+            document.getElementById("swal-input-using").value,
+          ];
         },
       });
-      if (quantity > itemSelectd.Stock) {
-        notEnough(itemSelectd, quantity);
-      } else if (quantity) {
-        const text = `ฉันต้องการเบิกพัสดุ\nรหัส : ${
-          itemSelectd.Material
-        }\nชื่อ : ${itemSelectd.MaterialDescription}\nจำนวน : ${quantity} ${
-          itemSelectd.Unit || "#N/A"
-        }\nสถานที่จัดเก็บ : ${itemSelectd.Location}`;
-        await updateStock(itemSelectd.Material, quantity);
-        handleSendTextLine(text);
-      }
+      await updateStock2(dataloader.line.profile.userId,itemSelectd.parCelCode, formValues[0], formValues[1]);
+      // if (quantity > itemSelectd.stockQuantity) {
+      //   notEnough(itemSelectd, quantity);FF
+      // } else if (quantity) {
+      //   const text = `ฉันต้องการเบิกพัสดุ\nรหัส : ${
+      //     itemSelectd.parCelCode
+      //   }\nชื่อ : ${itemSelectd.parCelName}\nจำนวน : ${quantity} ${
+      //     itemSelectd.Unit || "#N/A"
+      //   }\nสถานที่จัดเก็บ : ${itemSelectd.locationStock}`;
+      //   await updateStock2(dataloader.line.profile.userId,itemSelectd.parCelCode, quantity,"-");
+      //   handleSendTextLine(text);
+      // }
     } else {
       notEnough(itemSelectd, 0);
     }
@@ -244,9 +289,9 @@ function App() {
           <Grid2 container spacing={2} className="card">
             {state.items.map((x, index) => {
               const chipColor =
-                Number(x.Stock) > 5
+                Number(x.stockQuantity) > 5
                   ? "success"
-                  : Number(x.Stock) <= 5 && Number(x.Stock) > 0
+                  : Number(x.stockQuantity) <= 5 && Number(x.stockQuantity) > 0
                   ? "warning"
                   : "error";
               return (
@@ -269,16 +314,14 @@ function App() {
                           <Typography fontWeight={500}>
                             รหัส : &nbsp;
                           </Typography>
-                          <Typography>{x.Material}</Typography>
+                          <Typography>{x.parCelCode}</Typography>
                         </Grid2>
                         <Grid2 size={12}>
                           <Typography fontWeight={500}>
                             ชื่อ : &nbsp;
                           </Typography>
                           <Typography>
-                            {x.MaterialDescription === "#N/A"
-                              ? "-"
-                              : x.MaterialDescription}
+                            {x.parCelName === "#N/A" ? "-" : x.parCelName}
                           </Typography>
                         </Grid2>
                         <Grid2 size={12}>
@@ -289,7 +332,9 @@ function App() {
                             <Chip
                               label={
                                 <Typography>
-                                  {x.Stock === "#N/A" ? 0 : x.Stock}
+                                  {x.stockQuantity === "#N/A"
+                                    ? 0
+                                    : x.stockQuantity}
                                 </Typography>
                               }
                               size="small"
@@ -299,14 +344,14 @@ function App() {
                             &nbsp;
                           </Box>
                           <Typography>
-                            {x.Unit === "#N/A" ? "" : x.Unit}
+                            {x.unit === "#N/A" ? "" : x.unit}
                           </Typography>
                         </Grid2>
                         <Grid2 size={12}>
                           <Typography fontWeight={500}>
                             สถานที่จัดเก็บ : &nbsp;
                           </Typography>
-                          <Typography>{x.Location}</Typography>
+                          <Typography>{x.locationStock}</Typography>
                         </Grid2>
                       </Grid2>
                     </Box>
