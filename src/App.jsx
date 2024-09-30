@@ -54,6 +54,7 @@ function App() {
   };
   useEffect(() => {
     (async () => {
+      setIsSlideIn(false);
       const initialFrom = 0;
       const initialTo = 10;
       setDataFrom(initialFrom);
@@ -67,24 +68,26 @@ function App() {
         items: filteredItems,
         hasMore: filteredItems.length === 10,
       });
+      setIsSlideIn(true);
     })();
-  }, [search]);
-
-  useEffect(() => {
-    setIsSlideIn((prev) => !prev);
-    setTimeout(() => {
-      setIsSlideIn((prev) => !prev);
-    }, 150);
   }, [search]);
 
   const fetchGetParcel = async (search, from, to) => {
     const res = await getParcel(search, from, to);
-    return res?.data;
+    const objs = res.data.map((x) => {
+      return {
+        code: x.Material,
+        name: x.MaterialDescription,
+        stock: x.Stock,
+        unit: x.Unit,
+      };
+    });
+    return objs;
   };
   const handleClickItem = async (e) => {
     const itemSelectd = state.items[e];
     const inputValue = 1;
-    if (Number(itemSelectd.Stock) >= 0) {
+    if (Number(itemSelectd.stock) >= 0) {
       const { value: quantity } = await Swal.fire({
         title: "กรุณาระบุจำนวน",
         input: "number",
@@ -100,15 +103,15 @@ function App() {
           }
         },
       });
-      if (quantity > itemSelectd.Stock) {
+      if (quantity > itemSelectd.stock) {
         notEnough(itemSelectd, quantity);
       } else if (quantity) {
-        const text = `ฉันต้องการเบิกพัสดุ\nรหัส : ${
-          itemSelectd.Material
-        }\nชื่อ : ${itemSelectd.MaterialDescription}\nจำนวน : ${quantity} ${
+        const text = `ฉันต้องการเบิกพัสดุ\nรหัส : ${itemSelectd.code}\nชื่อ : ${
+          itemSelectd.name
+        }\nจำนวน : ${quantity} ${
           itemSelectd.Unit || "#N/A"
-        }\nสถานที่จัดเก็บ : ${itemSelectd.Location}`;
-        await updateStock(itemSelectd.Material, quantity);
+        }\nสถานที่จัดเก็บ : ${itemSelectd.location}`;
+        await updateStock(itemSelectd.code, quantity);
         handleSendTextLine(text);
       }
     } else {
@@ -127,10 +130,10 @@ function App() {
       cancelButtonText: "ยกเลิก",
     }).then((result) => {
       if (result.isConfirmed) {
-        const textOption = `จำนวน : ${quantity} (${itemSelectd.Stock}) ${itemSelectd.Unit}\nสถานที่จัดเก็บ : ${itemSelectd.Location}`;
+        const textOption = `จำนวน : ${quantity} (${itemSelectd.stock}) ${itemSelectd.unit}\nสถานที่จัดเก็บ : ${itemSelectd.location}`;
         const text = `ฉันต้องการเบิกพัสดุนี้ แต่พัสดุไม่เพียงพอ\nรหัส : ${
-          itemSelectd.Material
-        }\nชื่อ : ${itemSelectd.MaterialDescription}${
+          itemSelectd.code
+        }\nชื่อ : ${itemSelectd.name}${
           Number(quantity) > 0 ? "\n" + textOption : ""
         }`;
         handleSendTextLine(text);
@@ -218,7 +221,7 @@ function App() {
           hasMore={state.hasMore}
           loader={
             <Grid2 container spacing={2} marginTop={2}>
-              {Array.from({ length: 5 }).map((x, index) => {
+              {Array.from({ length: 3 }).map((x, index) => {
                 return (
                   <Grid2 size={12} key={index}>
                     <SkeletonItemCard />
@@ -244,9 +247,9 @@ function App() {
           <Grid2 container spacing={2} className="card">
             {state.items.map((x, index) => {
               const chipColor =
-                Number(x.Stock) > 5
+                Number(x.stock) > 5
                   ? "success"
-                  : Number(x.Stock) <= 5 && Number(x.Stock) > 0
+                  : Number(x.stock) <= 5 && Number(x.stock) > 0
                   ? "warning"
                   : "error";
               return (
@@ -269,16 +272,14 @@ function App() {
                           <Typography fontWeight={500}>
                             รหัส : &nbsp;
                           </Typography>
-                          <Typography>{x.Material}</Typography>
+                          <Typography>{x.code}</Typography>
                         </Grid2>
                         <Grid2 size={12}>
                           <Typography fontWeight={500}>
                             ชื่อ : &nbsp;
                           </Typography>
                           <Typography>
-                            {x.MaterialDescription === "#N/A"
-                              ? "-"
-                              : x.MaterialDescription}
+                            {x.name === "#N/A" ? "-" : x.name}
                           </Typography>
                         </Grid2>
                         <Grid2 size={12}>
@@ -289,7 +290,7 @@ function App() {
                             <Chip
                               label={
                                 <Typography>
-                                  {x.Stock === "#N/A" ? 0 : x.Stock}
+                                  {x.stock === "#N/A" ? 0 : x.stock}
                                 </Typography>
                               }
                               size="small"
@@ -299,14 +300,14 @@ function App() {
                             &nbsp;
                           </Box>
                           <Typography>
-                            {x.Unit === "#N/A" ? "" : x.Unit}
+                            {x.unit === "#N/A" ? "" : x.unit}
                           </Typography>
                         </Grid2>
                         <Grid2 size={12}>
                           <Typography fontWeight={500}>
                             สถานที่จัดเก็บ : &nbsp;
                           </Typography>
-                          <Typography>{x.Location}</Typography>
+                          <Typography>{x.location}</Typography>
                         </Grid2>
                       </Grid2>
                     </Box>
